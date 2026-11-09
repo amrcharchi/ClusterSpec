@@ -2,7 +2,8 @@ import numpy as np
 import plotly.graph_objects as go
 import streamlit as st
 
-from spectrum_model_v2 import isotope_pattern_general, gaussian_spectrum_general
+from model.isotopes import isotope_pattern_general
+from model.spectra import gaussian_spectrum_general
 
 
 def render_spectrum_visualization(
@@ -22,7 +23,7 @@ def render_spectrum_visualization(
         st.info("Select at least one cluster to display a spectrum.")
 
     else:
-        # Compute the original probability-density spectra on one common mass axis.
+        # Compute the original probability density spectra on one common mass axis.
         mass_grids = []
         peak_masses = []
 
