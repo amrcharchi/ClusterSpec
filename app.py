@@ -15,11 +15,7 @@ st.set_page_config(
     page_icon="assets/clusterspec_icon.png",
     layout="wide"
 )
-st.image(
-    "assets/clusterspec_logo.png" \
-    "",
-    width=550
-)
+st.title("ClusterSpec")
 
 st.caption("Cluster & Molecular Mass Spectrum Simulator")
 
