@@ -4,7 +4,7 @@ import streamlit as st
 from ui.cluster_generation import render_cluster_generation
 from ui.isotope_selection import render_isotope_selection
 from ui.overlap_selection import render_overlap_selection
-from ui.visualization import render_spectrum_visualization
+from ui.visualization import render_visualization_section
 from ui.labels import cluster_name
 
 from pathlib import Path
@@ -30,25 +30,9 @@ selected_isotopes = render_isotope_selection(elements)
 render_overlap_selection(clusters, elements, max_counts, selected_isotopes)
 
 # 4. Visualize individual isotope patterns or a hypothetical mixture.
-st.header("4. Mass spectrum visualization")
-selected_clusters = st.multiselect(
-    "Choose cluster spectra to display:",
-    options=clusters,
-    format_func=lambda cluster: cluster_name(cluster, elements),
-    placeholder="Select one or more clusters...",
-    key="plot_clusters"
-)
-R = st.slider(
-    "Mass resolving power (R = m / FWHM)",
-    min_value=500,
-    max_value=10000,
-    value=3000,
-    step=100
-)
-render_spectrum_visualization(
-    selected_clusters=selected_clusters,
+render_visualization_section(
+    clusters=clusters,
     elements=elements,
     selected_isotopes=selected_isotopes,
-    R=R,
-    cluster_name=cluster_name
+    cluster_name=cluster_name,
 )

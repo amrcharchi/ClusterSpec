@@ -100,6 +100,18 @@ def generate_core_series(core_composition, added_max_counts, include_bare_core=T
 
 
 
+class MolecularElements(list):
+    """Element order with display labels keyed by unique elemental composition.
+
+    Counts remain ordinary tuples for isotope calculations and dictionary keys.
+    On a composition collision, the first generated family supplies the label.
+    """
+
+    def __init__(self, elements):
+        super().__init__(elements)
+        self.species_labels = {}
+
+
 def generate_molecular_families(
     core_composition,
     added_max_counts,
@@ -107,9 +119,16 @@ def generate_molecular_families(
     include_bare_core=False,
     include_bare_additions=False,
     include_core_additions=False,
+    include_core_additions_reactant=False,
+    reactant_formula=None,
+    max_reactant_molecules=None,
 ):
-    #Generate independently selectable core, bare atom, and attached families.
-    
+    """Return (elements, actual maxima, unique elemental count tuples).
+
+    Reactant units are expanded before calculation. Display labels preserve
+    the molecular grouping; coincident compositions are emitted only once.
+    Reactant inputs are ignored when their family is disabled.
+    """
     core_composition = dict(core_composition or {})
     added_max_counts = dict(added_max_counts or {})
 
@@ -122,42 +141,61 @@ def generate_molecular_families(
     if set(core_composition) & set(added_max_counts):
         raise ValueError("Additional elements must differ from core elements.")
 
-    needs_core = include_bare_core or include_core_additions
-    needs_added = include_bare_additions or include_core_additions
-
+    needs_core = (include_bare_core or include_core_additions
+                  or include_core_additions_reactant)
+    needs_added = (include_bare_additions or include_core_additions
+                   or include_core_additions_reactant)
     if needs_core and not core_composition:
         raise ValueError("Enter a molecular core to generate core-containing species.")
     if needs_added and not added_max_counts:
         raise ValueError("Choose at least one variable element for this family.")
 
-    # The table of isotopes should only include elements used by the selected
-    # families; a bare-Nb-only search needn't ask about C isotopes.
-    core_elements = list(core_composition) if needs_core else []
-    extra_elements = list(added_max_counts) if needs_added else []
-    elements = core_elements + extra_elements
-    maxima = ([core_composition[s] for s in core_elements] +
-              [added_max_counts[s] for s in extra_elements])
+    reactant = {}
+    if include_core_additions_reactant:
+        reactant = parse_molecular_formula(reactant_formula)
+        if (not isinstance(max_reactant_molecules, int)
+                or isinstance(max_reactant_molecules, bool)
+                or max_reactant_molecules < 1):
+            raise ValueError("Maximum reactant molecules must be a positive integer.")
 
-    core_counts = tuple(core_composition[s] for s in core_elements)
-    zeros_core = (0,) * len(core_elements)
-    zeros_added = (0,) * len(extra_elements)
+    core = core_composition if needs_core else {}
+    additions = added_max_counts if needs_added else {}
+    elements = MolecularElements(dict.fromkeys([*core, *additions, *reactant]))
     species = []
 
+    def formula(composition):
+        return "".join(f"{s}{n if n > 1 else ''}"
+                       for s, n in composition.items() if n)
+
+    def append(composition, label):
+        counts = tuple(composition.get(s, 0) for s in elements)
+        if counts not in elements.species_labels:
+            species.append(counts)
+            elements.species_labels[counts] = label + "+"
+
     if include_bare_core:
-        species.append(core_counts + zeros_added)
+        append(core, formula(core))
 
-    if needs_added:
-        combinations_of_added_atoms = [
-            numbers
-            for numbers in product(*(range(added_max_counts[s] + 1)
-                                     for s in extra_elements))
-            if any(numbers)
-        ]
+    bare_species, attached_species, reactant_species = [], [], []
+    for numbers in product(*(range(n + 1) for n in additions.values())):
+        if not any(numbers):
+            continue
+        extra = dict(zip(additions, numbers))
+        attached = Counter(core) + Counter(extra)
+        label = formula(core) + formula(extra)
         if include_bare_additions:
-            species.extend(zeros_core + numbers
-                           for numbers in combinations_of_added_atoms)
+            bare_species.append((extra, formula(extra)))
         if include_core_additions:
-            species.extend(core_counts + numbers
-                           for numbers in combinations_of_added_atoms)
+            attached_species.append((attached, label))
+        if include_core_additions_reactant:
+            for units in range(1, max_reactant_molecules + 1):
+                total = attached.copy()
+                total.update({s: n * units for s, n in reactant.items()})
+                suffix = str(units) if units > 1 else ""
+                reactant_species.append((total, f"{label}({reactant_formula.strip()}){suffix}"))
 
+    for composition, label in bare_species + attached_species + reactant_species:
+        append(composition, label)
+    maxima = [max((counts[i] for counts in species), default=0)
+              for i in range(len(elements))]
     return elements, maxima, species

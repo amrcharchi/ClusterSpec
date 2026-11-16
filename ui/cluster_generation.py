@@ -26,7 +26,7 @@ def render_cluster_generation():
 
 
 def render_molecular_families():
-    """Build bare-core, bare-metal, and core+metal families as requested."""
+    """Build independently selected molecular and variable-element families."""
     st.caption(
         "Choose the families to generate. Enter a molecular core (such as "
         "C60) and one or two variable elements (such as Nb). As elsewhere "
@@ -125,23 +125,64 @@ def render_molecular_families():
         key="include_core_metals_v3",
     )
 
-    if not any((include_bare_core, include_bare_metals, include_core_metals)):
+    include_reactant = st.checkbox(
+        "Molecular core + variable-element clusters + reactant molecule(s)",
+        value=False,
+        key="include_core_reactant",
+    )
+    reactant_formula = None
+    max_reactant_molecules = None
+    if include_reactant:
+        reactant_formula = st.text_input(
+            "Reactant molecule formula", value="",
+            placeholder="e.g. H2O, O2, CH4", key="reactant_formula",
+        )
+        max_reactant_molecules = st.number_input(
+            "Maximum number of reactant molecules",
+            min_value=1, max_value=100, value=1, step=1,
+            placeholder="Enter maximum", key="max_reactant_molecules",
+        )
+        if not reactant_formula.strip() or max_reactant_molecules is None:
+            st.info("Enter a reactant formula and maximum number of molecules.")
+            st.stop()
+        try:
+            reactant = parse_molecular_formula(reactant_formula)
+        except FormulaError as exc:
+            st.warning(str(exc))
+            st.stop()
+        if sum(reactant.values()) * max_reactant_molecules > 300:
+            st.warning("The reactant molecules currently support at most 300 atoms in total.")
+            st.stop()
+        for element in reactant:
+            try:
+                available_isotopes = get_element_isotopes(element)
+            except (ValueError, KeyError, AttributeError):
+                available_isotopes = {}
+            if not available_isotopes:
+                st.warning(f"No natural isotope information is available for '{element}'.")
+                st.stop()
+        st.caption(
+            "Each reactant-containing species includes at least one variable-element "
+            "atom and one reactant molecule. Identical total compositions are listed once."
+        )
+
+    if not any((include_bare_core, include_bare_metals, include_core_metals, include_reactant)):
         st.info("Select at least one family of species to generate.")
         st.stop()
 
-    if (include_bare_core or include_core_metals) and not core_composition:
+    if (include_bare_core or include_core_metals or include_reactant) and not core_composition:
         st.info("Enter a fixed molecular core for the selected families.")
         st.stop()
 
-    if (include_bare_metals or include_core_metals) and not added_elements:
+    if (include_bare_metals or include_core_metals or include_reactant) and not added_elements:
         st.info("Choose at least one variable element for the selected families.")
         st.stop()
 
-    if (include_bare_metals or include_core_metals) and missing_maxima:
+    if (include_bare_metals or include_core_metals or include_reactant) and missing_maxima:
         st.info("Enter a maximum atom count for every selected variable element.")
         st.stop()
 
-    if len(added_elements) == 2 and (include_bare_metals or include_core_metals):
+    if len(added_elements) == 2 and (include_bare_metals or include_core_metals or include_reactant):
         st.caption(
             "With two variable elements, the selected families also include "
             "mixed compositions (e.g. NbFe+ and C60NbFe+)."
@@ -153,6 +194,9 @@ def render_molecular_families():
         include_bare_core=include_bare_core,
         include_bare_additions=include_bare_metals,
         include_core_additions=include_core_metals,
+        include_core_additions_reactant=include_reactant,
+        reactant_formula=reactant_formula,
+        max_reactant_molecules=max_reactant_molecules,
     )
     if not clusters:
         st.info("No species were generated. Check the selected families and maxima.")

@@ -6,11 +6,37 @@ from model.isotopes import isotope_pattern_general
 from model.spectra import gaussian_spectrum_general
 
 
+@st.fragment
+def render_visualization_section(clusters, elements, selected_isotopes, cluster_name):
+    
+    st.header("4. Mass spectrum visualization")
+    selected_clusters = st.multiselect(
+        "Choose cluster spectra to display:",
+        options=clusters,
+        format_func=lambda cluster: cluster_name(cluster, elements),
+        placeholder="Select one or more clusters...",
+        key="plot_clusters",
+    )
+    R = st.slider(
+        "Mass resolving power (R = m / FWHM)",
+        min_value=500,
+        max_value=10000,
+        value=3000,
+        step=100,
+    )
+    render_spectrum_visualization(
+        selected_clusters=selected_clusters,
+        elements=elements,
+        selected_isotopes=selected_isotopes,
+        R=R,
+        cluster_name=cluster_name,
+    )
+
+
 def render_spectrum_visualization(
     selected_clusters, elements, selected_isotopes, R, cluster_name
 ):
     """Render individual and hypothetical-mixture mass spectra.
-    cluster_name is the existing formatter: cluster_name(cluster, elements).
     """
     spectrum_mode = st.radio(
         "Spectrum display mode",
@@ -80,7 +106,7 @@ def render_spectrum_visualization(
             y_axis_title = y_display
             st.caption(
                 "Each cluster is displayed independently. In relative-intensity mode, "
-                "the strongest peak of each cluster is scaled to 100%; this does not "
+                "the strongest peak of each cluster is scaled to 100%. This does not "
                 "represent its abundance relative to other clusters."
             )
 

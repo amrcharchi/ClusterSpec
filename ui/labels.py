@@ -2,6 +2,10 @@ from collections import Counter
 
 def cluster_name(cluster, elements):
 
+    label = getattr(elements, "species_labels", {}).get(tuple(cluster))
+    if label is not None:
+        return label
+
     return "".join(
         f"{element}{n if n > 1 else ''}"
         for element, n in zip(elements, cluster)
