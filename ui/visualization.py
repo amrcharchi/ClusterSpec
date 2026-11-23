@@ -4,6 +4,8 @@ import streamlit as st
 
 from model.isotopes import isotope_pattern_general
 from model.spectra import gaussian_spectrum_general
+from ui.labels import isotopologue_label
+from ui.spectrum_hover import render_hover_chart
 
 
 @st.fragment
@@ -52,17 +54,24 @@ def render_spectrum_visualization(
         # Compute the original probability density spectra on one common mass axis.
         mass_grids = []
         peak_masses = []
+        hover_species = []
 
         for cluster in selected_clusters:
             composition = dict(zip(elements, cluster))
             pattern = isotope_pattern_general(composition, selected_isotopes)
 
-            for mass, probability in pattern.values():
+            isotopologues = []
+            for isotopes, (mass, probability) in pattern.items():
+                isotopologues.append((mass, probability, isotopologue_label(isotopes)))
                 sigma = mass / (2.355 * R)
                 peak_masses.append(mass)
                 mass_grids.append(
                     np.linspace(max(0.0, mass - 5 * sigma), mass + 5 * sigma, 81)
                 )
+            hover_species.append({
+                "formula": cluster_name(cluster, elements),
+                "isotopologues": isotopologues,
+            })
 
         mass_axis = np.unique(np.concatenate(mass_grids))
 
@@ -78,6 +87,8 @@ def render_spectrum_visualization(
             "#d62728", "#17becf", "#8c564b", "#e377c2",
         ]
         fig = go.Figure()
+        hover_traces = []
+        mixture = None
 
         if spectrum_mode == "Individual spectra":
             y_display = st.radio(
@@ -102,6 +113,7 @@ def render_spectrum_visualization(
                     name=cluster_name(cluster, elements),
                     line=dict(color=colors[i % len(colors)], width=2),
                 ))
+                hover_traces.append({"species": i, "peak": float(np.max(values))})
 
             y_axis_title = y_display
             st.caption(
@@ -194,6 +206,10 @@ def render_spectrum_visualization(
                 # individually normalized before or after their weighted sum.
                 peak = np.max(total_density)
                 scale = 100.0 / peak if peak > 0 else 0.0
+                mixture = {
+                    "weights": [fractions[cluster] for cluster in selected_clusters],
+                    "scale": float(scale),
+                }
 
                 if show_components:
                     for i, cluster in enumerate(selected_clusters):
@@ -211,6 +227,7 @@ def render_spectrum_visualization(
                                 dash="dash",
                             ),
                         ))
+                        hover_traces.append({"species": i, "peak": float(scale * peak)})
 
                 fig.add_trace(go.Scatter(
                     x=mass_axis,
@@ -219,6 +236,7 @@ def render_spectrum_visualization(
                     name="Hypothetical total",
                     line=dict(color="#202020", width=3),
                 ))
+                hover_traces.append({"species": None, "peak": float(scale * peak)})
 
                 y_axis_title = "Relative intensity (%)"
                 st.caption(
@@ -243,7 +261,6 @@ def render_spectrum_visualization(
                 xaxis_title="m/z (Th)",
                 yaxis_title=y_axis_title,
                 dragmode="zoom",
-                hovermode="x unified",
                 margin=dict(l=35, r=25, t=30, b=50),
                 legend=dict(orientation="h", y=1.02, x=0),
             )
@@ -258,13 +275,11 @@ def render_spectrum_visualization(
                 fixedrange=False,
             )
 
-            st.plotly_chart(
+            render_hover_chart(
                 fig,
-                width="stretch",
-                config={
-                    "displayModeBar": True,
-                    "scrollZoom": False,
-                    "showAxisDragHandles": False,
-                    
-                },
+                hover_species,
+                hover_traces,
+                mixture,
+                R,
+                y_axis_title,
             )
